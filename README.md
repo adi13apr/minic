@@ -17,3 +17,5 @@
   builtin function, so the grammar stays smaller.
 - **Diagnostics use `llvm::SourceMgr`**, giving `file:line:col: error:` output with the
   source line and a caret, matching Clang.
+
+  See [docs/grammar.md](docs/grammar.md) for the full grammar
