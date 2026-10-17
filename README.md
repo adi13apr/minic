@@ -39,4 +39,25 @@
 - **`--dump-ast` stops after parsing**, so parser tests do not depend on Sema.
   Expressions print as S-expressions, which makes precedence tests exact.
 
+  ### Semantic analysis
+
+- **Two passes**: first every function signature is recorded, then bodies are
+  checked, so calls may refer to functions defined later and recursion works.
+- **Scopes as a stack of `llvm::StringMap`s**, searched innermost first. Redeclaring a
+  name in the same block is an error (with a note at the earlier declaration); an
+  inner block may shadow an outer name. Parameters share the function body's scope.
+- **An `Error` type stops cascades**: once an expression is reported as invalid, its
+  type is `Error` and nothing that uses it reports again. Operators always have a known
+  result type, so `(1 + true) * 2` reports one error, not two.
+- **Sema annotates the AST** with each expression's type and each literal's value, so
+  codegen never re-derives them.
+- **Sema only runs on an AST without syntax errors**, so it never has to handle a
+  partially parsed program.
+- **`-2147483648` is accepted** even though `2147483648` alone does not fit in `int`: a
+  literal directly under unary minus may be one larger than `INT32_MAX`.
+- **Missing-return check is conservative**: a non-void function must return on every
+  path through `if`/`else`; loops never count, not even `while (true)`. Deciding whether
+  a loop terminates is impossible in general, so the check errs on the safe side.
+- **`print(int)` is a builtin** checked like a normal call, and cannot be redefined.
+
   See [docs/grammar.md](docs/grammar.md) for the full grammar

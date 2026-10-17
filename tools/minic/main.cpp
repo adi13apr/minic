@@ -9,6 +9,7 @@
 #include "minic/Diagnostic.h"
 #include "minic/Lexer.h"
 #include "minic/Parser.h"
+#include "minic/Sema.h"
 #include "minic/Token.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -81,8 +82,15 @@ int main(int argc, char **argv) {
   minic::Parser P(Lex, Diags);
   std::unique_ptr<minic::Program> Prog = P.parseProgram();
 
-  if (DumpAST)
+  if (DumpAST) {
     minic::dumpAST(*Prog, outs());
+    return Diags.hasErrors() ? 1 : 0;
+  }
 
+  // Sema assumes a well-formed AST, so it only runs if parsing succeeded.
+  if (Diags.hasErrors())
+    return 1;
+
+  minic::checkProgram(*Prog, Diags);
   return Diags.hasErrors() ? 1 : 0;
 }
