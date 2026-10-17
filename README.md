@@ -60,4 +60,29 @@
   a loop terminates is impossible in general, so the check errs on the safe side.
 - **`print(int)` is a builtin** checked like a normal call, and cannot be redefined.
 
+### Code generation
+
+- **Locals live in stack slots (`alloca`) in the entry block**, read with `load` and
+  written with `store`, as Clang does. LLVM's `mem2reg` pass then builds SSA form, so the
+  frontend never computes phi nodes for variables. Allocas must be in the entry block
+  for `mem2reg` to promote them, wherever the variable is declared.
+- **Parameters are copied into slots** (`%x.addr`) because SSA arguments cannot be
+  reassigned; `mem2reg` removes the copies.
+- **Wrapping integer arithmetic**: no `nsw`/`nuw` flags, so overflow is defined
+  (two's complement) instead of producing poison.
+- **Division is guarded**: `sdiv` is undefined behavior in LLVM for division by zero and
+  `INT_MIN / -1`, so both branch to a per-function block that calls `llvm.trap`. A
+  constant divisor other than 0 and -1 skips the guard.
+- **Short-circuit `&&` and `||`** use a conditional branch and a `phi`. The phi's
+  incoming block is wherever the right operand *ended*, since a nested `&&`/`||` moves
+  the insertion point to a new block.
+- **Only `main` has external linkage**; every other function is `internal`, so the
+  optimizer can inline it and delete the original.
+- **Every block ends in exactly one terminator**: statements after a `return` are not
+  emitted, an `if.end` that nothing jumps to is deleted, and a non-void function whose
+  last block could fall through (impossible after Sema) ends in `unreachable`.
+- **The module is always verified** with `llvm::verifyModule`; invalid IR is treated as a
+  compiler bug and aborts.
+- **`print` lowers to a call to `minic_print`**, provided by a small C runtime.
+
   See [docs/grammar.md](docs/grammar.md) for the full grammar

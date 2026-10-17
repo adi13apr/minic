@@ -6,12 +6,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "minic/ASTDumper.h"
+#include "minic/CodeGen.h"
 #include "minic/Diagnostic.h"
 #include "minic/Lexer.h"
 #include "minic/Parser.h"
 #include "minic/Sema.h"
 #include "minic/Token.h"
 
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -40,6 +43,10 @@ static cl::opt<bool>
     DumpAST("dump-ast",
             cl::desc("Print the AST after parsing (no semantic checks)"),
             cl::cat(MinicCategory));
+
+static cl::opt<bool> EmitLLVM("emit-llvm",
+                              cl::desc("Print the generated LLVM IR"),
+                              cl::cat(MinicCategory));
 
 static void dumpToken(const minic::Token &Tok, const SourceMgr &SrcMgr,
                       unsigned BufferID, raw_ostream &OS) {
@@ -92,5 +99,16 @@ int main(int argc, char **argv) {
     return 1;
 
   minic::checkProgram(*Prog, Diags);
-  return Diags.hasErrors() ? 1 : 0;
+  if (Diags.hasErrors())
+    return 1;
+
+  // The context must outlive the module, so it is declared first: locals
+  // are destroyed in reverse order of declaration.
+  LLVMContext Ctx;
+  std::unique_ptr<Module> M = minic::generateIR(*Prog, Ctx, InputFilename);
+
+  if (EmitLLVM)
+    M->print(outs(), nullptr);
+
+  return 0;
 }
