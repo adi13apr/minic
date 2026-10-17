@@ -1,0 +1,1 @@
+// RUN: %minic %s

@@ -45,3 +45,4 @@ if(MINIC_SANITIZE)
 endif()
 
 add_subdirectory(tools/minic)
+add_subdirectory(test)
