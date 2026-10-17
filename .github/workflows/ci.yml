@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Release (Werror)
+            cmake_flags: -DCMAKE_BUILD_TYPE=Release -DMINIC_WERROR=ON
+          - name: Debug (ASan + UBSan)
+            cmake_flags: -DCMAKE_BUILD_TYPE=Debug -DMINIC_SANITIZE=ON
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm-18-dev llvm-18-tools clang-18 ninja-build \
+            zlib1g-dev libzstd-dev libedit-dev libcurl4-openssl-dev
+          pipx install lit
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+            ${{ matrix.cmake_flags }}
+
+      - name: Build and test
+        run: ninja -C build check
+
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format-18
+
+      - name: Check formatting
+        run: clang-format-18 --dry-run --Werror $(git ls-files '*.cpp' '*.h')
