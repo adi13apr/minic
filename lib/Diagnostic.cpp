@@ -10,3 +10,6 @@ void DiagnosticEngine::error(llvm::SMLoc Loc, const llvm::Twine &Message) {
   SrcMgr.PrintMessage(Loc, llvm::SourceMgr::DK_Error, Message);
   ++NumErrors;
 }
+void DiagnosticEngine::note(llvm::SMLoc Loc, const llvm::Twine &Message) {
+  SrcMgr.PrintMessage(Loc, llvm::SourceMgr::DK_Note, Message);
+}

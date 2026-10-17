@@ -24,7 +24,9 @@ public:
   explicit DiagnosticEngine(const llvm::SourceMgr &SrcMgr) : SrcMgr(SrcMgr) {}
 
   void error(llvm::SMLoc Loc, const llvm::Twine &Message);
-
+  /// Extra context for the previous error, e.g. "previous definition is here".
+  /// Notes do not count as errors.
+  void note(llvm::SMLoc Loc, const llvm::Twine &Message);
   unsigned getNumErrors() const { return NumErrors; }
   bool hasErrors() const { return NumErrors != 0; }
 
