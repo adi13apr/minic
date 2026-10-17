@@ -1,6 +1,9 @@
 add_library(minicCompiler
+  AST.cpp
+  ASTDumper.cpp
   Diagnostic.cpp
   Lexer.cpp
+  Parser.cpp
   Token.cpp)
 
 target_include_directories(minicCompiler PUBLIC ${PROJECT_SOURCE_DIR}/include)

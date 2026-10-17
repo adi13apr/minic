@@ -5,8 +5,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "minic/ASTDumper.h"
 #include "minic/Diagnostic.h"
 #include "minic/Lexer.h"
+#include "minic/Parser.h"
 #include "minic/Token.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -28,9 +30,15 @@ static cl::opt<std::string> InputFilename(cl::Positional, cl::Required,
                                           cl::desc("<input file>"),
                                           cl::cat(MinicCategory));
 
-static cl::opt<bool> DumpTokens("dump-tokens",
-                                cl::desc("Print each token with its location"),
-                                cl::cat(MinicCategory));
+static cl::opt<bool>
+    DumpTokens("dump-tokens",
+               cl::desc("Print each token with its location, then stop"),
+               cl::cat(MinicCategory));
+
+static cl::opt<bool>
+    DumpAST("dump-ast",
+            cl::desc("Print the AST after parsing (no semantic checks)"),
+            cl::cat(MinicCategory));
 
 static void dumpToken(const minic::Token &Tok, const SourceMgr &SrcMgr,
                       unsigned BufferID, raw_ostream &OS) {
@@ -60,15 +68,21 @@ int main(int argc, char **argv) {
   minic::DiagnosticEngine Diags(SrcMgr);
   minic::Lexer Lex(SrcMgr, BufferID, Diags);
 
-  // Until the parser exists, lex the whole file so that every lexical error
-  // is reported.
-  while (true) {
-    minic::Token Tok = Lex.lex();
-    if (DumpTokens)
+  if (DumpTokens) {
+    while (true) {
+      minic::Token Tok = Lex.lex();
       dumpToken(Tok, SrcMgr, BufferID, outs());
-    if (Tok.is(minic::tok::eof))
-      break;
+      if (Tok.is(minic::tok::eof))
+        break;
+    }
+    return Diags.hasErrors() ? 1 : 0;
   }
+
+  minic::Parser P(Lex, Diags);
+  std::unique_ptr<minic::Program> Prog = P.parseProgram();
+
+  if (DumpAST)
+    minic::dumpAST(*Prog, outs());
 
   return Diags.hasErrors() ? 1 : 0;
 }

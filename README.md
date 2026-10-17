@@ -18,4 +18,25 @@
 - **Diagnostics use `llvm::SourceMgr`**, giving `file:line:col: error:` output with the
   source line and a caret, matching Clang.
 
+  ### Parser and AST
+
+- **Hand-written recursive descent**, one method per rule in `docs/grammar.md`, as in
+  Clang. No parser generator dependency, and full control over error messages.
+- **Precedence climbing for binary expressions.** One function reads the precedence
+  table instead of one function per precedence level. Parsing the right operand at
+  `precedence + 1` makes every operator left-associative.
+- **Two-token lookahead** (current and next token) to tell `x = ...;` apart from
+  `x(...);`, since both start with an identifier.
+- **AST ownership with `std::unique_ptr`**: each node owns its children, so the whole
+  tree is freed when the `Program` is destroyed. Names are `StringRef`s into the source
+  buffer, so the AST must not outlive the `SourceMgr`.
+- **LLVM-style RTTI** (`classof` with `isa<>`, `cast<>`, `dyn_cast<>`) instead of
+  `dynamic_cast`: faster, independent of C++ RTTI, and the idiom used throughout LLVM.
+- **No node for parentheses**: the tree's shape already records the grouping.
+- **Panic-mode error recovery**: after an error, skip to the next `;` (or past a nested
+  `{ ... }`), or to the next `fn` at top level. A missing `;` is reported right after the
+  previous token and the statement is kept, so one mistake does not hide others.
+- **`--dump-ast` stops after parsing**, so parser tests do not depend on Sema.
+  Expressions print as S-expressions, which makes precedence tests exact.
+
   See [docs/grammar.md](docs/grammar.md) for the full grammar
