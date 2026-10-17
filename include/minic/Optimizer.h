@@ -6,13 +6,16 @@
 
 namespace llvm {
 class Module;
+class TargetMachine;
 } // namespace llvm
 
 namespace minic {
 
 /// Runs LLVM's standard pipeline for -O1, -O2 or -O3 on M. Level 0 leaves
 /// the module unchanged, so -O0 output is exactly what codegen produced.
-void optimizeModule(llvm::Module &M, unsigned OptLevel);
+/// If TM is given, the passes use its cost model (TargetTransformInfo).
+void optimizeModule(llvm::Module &M, unsigned OptLevel,
+                    llvm::TargetMachine *TM = nullptr);
 
 } // namespace minic
 

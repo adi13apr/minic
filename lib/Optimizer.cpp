@@ -9,7 +9,8 @@
 #include "llvm/Passes/OptimizationLevel.h"
 #include "llvm/Passes/PassBuilder.h"
 
-void minic::optimizeModule(llvm::Module &M, unsigned OptLevel) {
+void minic::optimizeModule(llvm::Module &M, unsigned OptLevel,
+                           llvm::TargetMachine *TM) {
   if (OptLevel == 0)
     return;
 
@@ -25,7 +26,9 @@ void minic::optimizeModule(llvm::Module &M, unsigned OptLevel) {
   llvm::CGSCCAnalysisManager CGAM;
   llvm::ModuleAnalysisManager MAM;
 
-  llvm::PassBuilder PB;
+  // With a TargetMachine, passes such as the inliner, loop unroller and
+  // vectorizer ask the target what instructions cost, instead of guessing.
+  llvm::PassBuilder PB(TM);
   PB.registerModuleAnalyses(MAM);
   PB.registerCGSCCAnalyses(CGAM);
   PB.registerFunctionAnalyses(FAM);
