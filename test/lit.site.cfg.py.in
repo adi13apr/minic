@@ -1,5 +1,6 @@
 config.minic_src_root = "@PROJECT_SOURCE_DIR@"
 config.minic_obj_root = "@PROJECT_BINARY_DIR@"
 config.llvm_tools_dir = "@LLVM_TOOLS_BINARY_DIR@"
+config.minic_has_nvptx = "@MINIC_HAS_NVPTX@"
 
 lit_config.load_config(config, "@CMAKE_CURRENT_SOURCE_DIR@/lit.cfg.py")

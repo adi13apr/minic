@@ -18,6 +18,14 @@ find_package(LLVM 18.1 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 message(STATUS "LLVM built with RTTI: ${LLVM_ENABLE_RTTI}")
+# The NVPTX backend is optional: without it, minic builds normally and only
+# --emit-ptx is unavailable.
+if("NVPTX" IN_LIST LLVM_TARGETS_TO_BUILD)
+  set(MINIC_HAS_NVPTX ON)
+else()
+  set(MINIC_HAS_NVPTX OFF)
+endif()
+message(STATUS "NVPTX target available: ${MINIC_HAS_NVPTX}")
 
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})

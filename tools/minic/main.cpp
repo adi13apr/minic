@@ -2,7 +2,8 @@
 //
 // Entry point for the minic compiler. Runs every stage on the input file and,
 // by default, links the result into a native executable by invoking clang on
-// the generated IR together with the minic runtime library.
+// the generated IR together with the minic runtime library. With --emit-ptx
+// it compiles for NVIDIA GPUs instead, using LLVM's NVPTX backend.
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,6 +15,11 @@
 #include "minic/Parser.h"
 #include "minic/Sema.h"
 #include "minic/Token.h"
+
+#ifdef MINIC_HAS_NVPTX
+#include "minic/PTXEmitter.h"
+#include "llvm/Target/TargetMachine.h"
+#endif
 
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
@@ -50,7 +56,7 @@ static cl::opt<std::string> InputFilename(cl::Positional, cl::Required,
 static cl::opt<std::string> OutputFilename(
     "o",
     cl::desc("Write output to <file> (default: a.out, or stdout with "
-             "--emit-llvm)"),
+             "--emit-llvm or --emit-ptx)"),
     cl::value_desc("file"), cl::cat(MinicCategory));
 
 static cl::opt<unsigned>
@@ -71,6 +77,16 @@ static cl::opt<bool>
     EmitLLVM("emit-llvm",
              cl::desc("Write LLVM IR instead of linking an executable"),
              cl::cat(MinicCategory));
+
+static cl::opt<bool>
+    EmitPTX("emit-ptx",
+            cl::desc("Compile for NVIDIA GPUs and write PTX assembly"),
+            cl::cat(MinicCategory));
+
+static cl::opt<std::string>
+    GPUArch("gpu-arch",
+            cl::desc("GPU architecture for --emit-ptx (default: sm_70)"),
+            cl::value_desc("sm_XX"), cl::init("sm_70"), cl::cat(MinicCategory));
 
 static cl::opt<std::string>
     ClangPath("clang",
@@ -156,6 +172,48 @@ static bool linkExecutable(const Module &M, StringRef OutputPath,
   return false;
 }
 
+/// Compiles Prog for an NVIDIA GPU and writes PTX (or, with --emit-llvm, the
+/// GPU-targeted IR) to OutputPath.
+static int compileForGPU(const minic::Program &Prog, LLVMContext &Ctx,
+                         StringRef OutputPath, unsigned Level) {
+#ifdef MINIC_HAS_NVPTX
+  std::string Error;
+  std::unique_ptr<TargetMachine> TM =
+      minic::createNVPTXTargetMachine(GPUArch, Level, Error);
+  if (!TM)
+    return reportError(Error);
+
+  // Generate the IR for the GPU from the start, so the optimizer sees the
+  // GPU's data layout rather than the host's.
+  minic::CodeGenOptions Opts;
+  Opts.TargetTriple = TM->getTargetTriple().str();
+  Opts.DataLayout = TM->createDataLayout().getStringRepresentation();
+  Opts.ExportAllFunctions = true;
+
+  std::unique_ptr<Module> M = minic::generateIR(Prog, Ctx, InputFilename, Opts);
+  minic::optimizeModule(*M, Level, TM.get());
+
+  if (EmitLLVM)
+    return writeIR(*M, OutputPath) ? 0 : 1;
+
+  std::error_code EC;
+  ToolOutputFile Out(OutputPath, EC, sys::fs::OF_Text);
+  if (EC)
+    return reportError("could not open '" + OutputPath + "': " + EC.message());
+  if (!minic::emitPTX(*M, *TM, Out.os()))
+    return reportError("the NVPTX target cannot emit PTX assembly");
+  Out.keep();
+  return 0;
+#else
+  (void)Prog;
+  (void)Ctx;
+  (void)OutputPath;
+  (void)Level;
+  return reportError("this minic was built without LLVM's NVPTX target, so "
+                     "--emit-ptx is unavailable");
+#endif
+}
+
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
 
@@ -202,19 +260,29 @@ int main(int argc, char **argv) {
   if (Diags.hasErrors())
     return 1;
 
-  minic::checkProgram(*Prog, Diags);
+  // GPU code has no main and no runtime library for print.
+  minic::SemaOptions SemaOpts;
+  if (EmitPTX) {
+    SemaOpts.RequireMain = false;
+    SemaOpts.AllowPrint = false;
+  }
+  minic::checkProgram(*Prog, Diags, SemaOpts);
   if (Diags.hasErrors())
     return 1;
 
-  // The context must outlive the module, so it is declared first: locals
-  // are destroyed in reverse order of declaration.
-  LLVMContext Ctx;
-  std::unique_ptr<Module> M = minic::generateIR(*Prog, Ctx, InputFilename);
-  minic::optimizeModule(*M, Level);
-
   std::string Output = OutputFilename;
   if (Output.empty())
-    Output = EmitLLVM ? "-" : "a.out";
+    Output = EmitLLVM || EmitPTX ? "-" : "a.out";
+
+  // The context must outlive every module, so it is declared first: locals
+  // are destroyed in reverse order of declaration.
+  LLVMContext Ctx;
+
+  if (EmitPTX)
+    return compileForGPU(*Prog, Ctx, Output, Level);
+
+  std::unique_ptr<Module> M = minic::generateIR(*Prog, Ctx, InputFilename);
+  minic::optimizeModule(*M, Level);
 
   if (EmitLLVM)
     return writeIR(*M, Output) ? 0 : 1;

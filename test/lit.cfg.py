@@ -20,3 +20,6 @@ config.environment["PATH"] = os.pathsep.join(
 config.substitutions.append(
     ("%examples", os.path.join(config.minic_src_root, "examples"))
 )
+# Tests marked "REQUIRES: nvptx" are skipped when LLVM has no NVPTX backend.
+if config.minic_has_nvptx == "ON":
+    config.available_features.add("nvptx")
