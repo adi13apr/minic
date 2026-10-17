@@ -18,6 +18,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Host.h"
 
 #include <cstdint>
 #include <vector>
@@ -93,6 +94,9 @@ private:
 
 std::unique_ptr<llvm::Module> CodeGenerator::run(const Program &Prog) {
   // Declare every function first, so calls can refer to any of them.
+  // Tag the module with the machine minic runs on, which is also the
+  // machine clang will compile it for when linking.
+  M->setTargetTriple(llvm::sys::getDefaultTargetTriple());
   for (const std::unique_ptr<FunctionDecl> &Fn : Prog.getFunctions())
     declareFunction(*Fn);
   for (const std::unique_ptr<FunctionDecl> &Fn : Prog.getFunctions())
