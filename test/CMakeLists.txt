@@ -6,6 +6,6 @@ configure_file(lit.site.cfg.py.in lit.site.cfg.py @ONLY)
 
 add_custom_target(check
   COMMAND ${LIT_EXECUTABLE} -sv ${CMAKE_CURRENT_BINARY_DIR}
-  DEPENDS minic
+  DEPENDS minic minicRuntime
   USES_TERMINAL
   COMMENT "Running minic lit tests")

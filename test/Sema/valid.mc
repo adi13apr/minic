@@ -1,5 +1,4 @@
-// RUN: %minic %s
-
+// RUN: %minic %s -o %t
 // Every feature used correctly: Sema must accept this program.
 
 fn main() -> int {

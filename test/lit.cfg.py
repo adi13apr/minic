@@ -17,3 +17,6 @@ config.substitutions.append(
 config.environment["PATH"] = os.pathsep.join(
     [config.llvm_tools_dir, config.environment.get("PATH", "")]
 )
+config.substitutions.append(
+    ("%examples", os.path.join(config.minic_src_root, "examples"))
+)
