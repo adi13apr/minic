@@ -37,7 +37,8 @@ CMake options: `-DMINIC_WERROR=ON` treats warnings as errors, and
 `-DMINIC_SANITIZE=ON` builds with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 ## Usage
-
+minic --emit-ptx -O2 device.mc               # compile for NVIDIA GPUs, print PTX
+minic --emit-ptx --gpu-arch=sm_80 device.mc  # for a specific GPU architecture
 ```
 minic program.mc -o program        # compile and link a native executable
 minic -O2 program.mc -o program    # optimize with LLVM's -O2 pipeline
@@ -186,6 +187,26 @@ print as `file:line:col: error: message` with the source line and a caret.
 - **`minic_print` flushes stdout** after every call, so output printed before a
   division trap is not lost.
 
+
+### GPU (PTX) output
+
+- **`--emit-ptx` uses LLVM's NVPTX backend in-process**: a `TargetMachine` for
+  `nvptx64-nvidia-cuda` and the chosen `sm_XX` architecture runs instruction selection
+  and prints PTX, NVIDIA's virtual ISA. `ptxas` or the GPU driver turns PTX into SASS.
+- **IR is generated for the GPU from the start**: the module gets the NVPTX triple and
+  data layout before optimization, and the optimizer gets the `TargetMachine`, so passes
+  use the GPU's cost model (`TargetTransformInfo`) instead of the host's.
+- **Every function is a device function (`.func`) with external linkage**, so each one
+  appears in the PTX. Kernels (`.entry`) are not supported: a kernel communicates only
+  through memory, which needs pointer types that minic does not have yet.
+- **`print` is rejected for the GPU**, and `main` is not required. CUDA implements
+  device-side `printf` by lowering it to `vprintf`; doing the same is future work.
+- **The NVPTX backend is optional**: CMake detects it from `LLVM_TARGETS_TO_BUILD`, and
+  GPU tests are marked `REQUIRES: nvptx` so lit skips them when it is missing.
+- **An unknown `--gpu-arch` is an error**, rather than LLVM's default of warning and
+  silently using a fallback architecture.
+
+
 ## Testing
 
 All tests use lit and FileCheck and run with `ninja -C build check`.
@@ -198,6 +219,7 @@ All tests use lit and FileCheck and run with `ninja -C build check`.
 | `test/Sema`    | Every semantic error, with exact `file:line:col` locations              |
 | `test/CodeGen` | The generated IR, at `-O0` and `-O2`                                    |
 | `test/E2E`     | Compiled programs run and print the right output, at `-O0` and `-O2`    |
+| `test/PTX`     | PTX output for NVIDIA GPUs (skipped without the NVPTX backend)          |
 
 CI runs three jobs on every push: a Release build with `-Werror`, a Debug build with
 ASan and UBSan, and a clang-format check.
@@ -210,7 +232,8 @@ ASan and UBSan, and a clang-format check.
 - The runtime library's path is fixed at build time (override with `--runtime=<path>`).
 - The optimizer runs without the target's data layout; clang applies it when linking.
 - No debug information.
-
+- GPU output has device functions only: kernels need pointer types, and device-side
+  `print` would need lowering to CUDA's `vprintf`.
 
 
 
