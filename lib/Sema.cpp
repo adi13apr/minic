@@ -44,7 +44,8 @@ private:
 
 class SemaChecker {
 public:
-  explicit SemaChecker(DiagnosticEngine &Diags) : Diags(Diags) {}
+  SemaChecker(DiagnosticEngine &Diags, const SemaOptions &Opts)
+      : Diags(Diags), Opts(Opts) {}
 
   void checkProgram(Program &Prog);
 
@@ -70,6 +71,7 @@ private:
   const VarInfo *lookupVar(llvm::StringRef Name) const;
 
   DiagnosticEngine &Diags;
+  const SemaOptions &Opts;
   llvm::StringMap<const FunctionDecl *> Functions;
   std::vector<Scope> Scopes;
   const FunctionDecl *CurFn = nullptr;
@@ -107,7 +109,8 @@ void SemaChecker::checkProgram(Program &Prog) {
   // Pass 1: record every function signature, so a call may refer to a
   // function defined later in the file, or to the function itself.
   collectFunctions(Prog);
-  checkMain();
+  if (Opts.RequireMain)
+    checkMain();
 
   // Pass 2: check every function body.
   for (const std::unique_ptr<FunctionDecl> &Fn : Prog.getFunctions())
@@ -424,6 +427,11 @@ Type SemaChecker::checkCall(CallExpr &Call) {
   llvm::ArrayRef<ParamDecl> Params;
   Type ReturnTy;
   if (Call.getCallee() == "print") {
+    if (!Opts.AllowPrint) {
+      Diags.error(Call.getLoc(),
+                  "'print' is not available when compiling for the GPU");
+      return Type::Void;
+    }
     Params = PrintParams;
     ReturnTy = Type::Void;
   } else {
@@ -459,6 +467,7 @@ Type SemaChecker::checkCall(CallExpr &Call) {
   return ReturnTy;
 }
 
-void minic::checkProgram(Program &Prog, DiagnosticEngine &Diags) {
-  SemaChecker(Diags).checkProgram(Prog);
+void minic::checkProgram(Program &Prog, DiagnosticEngine &Diags,
+                         const SemaOptions &Opts) {
+  SemaChecker(Diags, Opts).checkProgram(Prog);
 }

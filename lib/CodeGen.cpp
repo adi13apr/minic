@@ -45,9 +45,10 @@ private:
 
 class CodeGenerator {
 public:
-  CodeGenerator(llvm::LLVMContext &Ctx, llvm::StringRef ModuleName)
-      : Ctx(Ctx), M(std::make_unique<llvm::Module>(ModuleName, Ctx)),
-        Builder(Ctx) {}
+  CodeGenerator(llvm::LLVMContext &Ctx, llvm::StringRef ModuleName,
+                const CodeGenOptions &Opts)
+      : Ctx(Ctx), Opts(Opts),
+        M(std::make_unique<llvm::Module>(ModuleName, Ctx)), Builder(Ctx) {}
 
   std::unique_ptr<llvm::Module> run(const Program &Prog);
 
@@ -78,6 +79,7 @@ private:
   llvm::BasicBlock *getTrapBlock();
 
   llvm::LLVMContext &Ctx;
+  const CodeGenOptions &Opts;
   std::unique_ptr<llvm::Module> M;
   llvm::IRBuilder<> Builder;
   std::vector<Scope> Scopes;
@@ -93,10 +95,15 @@ private:
 //===----------------------------------------------------------------------===//
 
 std::unique_ptr<llvm::Module> CodeGenerator::run(const Program &Prog) {
+  // Tag the module with the target it is compiled for. By default that is
+  // the machine minic runs on, which clang also compiles for when linking.
+  M->setTargetTriple(Opts.TargetTriple.empty()
+                         ? llvm::sys::getDefaultTargetTriple()
+                         : Opts.TargetTriple);
+  if (!Opts.DataLayout.empty())
+    M->setDataLayout(Opts.DataLayout);
+
   // Declare every function first, so calls can refer to any of them.
-  // Tag the module with the machine minic runs on, which is also the
-  // machine clang will compile it for when linking.
-  M->setTargetTriple(llvm::sys::getDefaultTargetTriple());
   for (const std::unique_ptr<FunctionDecl> &Fn : Prog.getFunctions())
     declareFunction(*Fn);
   for (const std::unique_ptr<FunctionDecl> &Fn : Prog.getFunctions())
@@ -107,7 +114,6 @@ std::unique_ptr<llvm::Module> CodeGenerator::run(const Program &Prog) {
         "minic generated invalid LLVM IR; this is a compiler bug");
   return std::move(M);
 }
-
 llvm::Type *CodeGenerator::getLLVMType(Type T) {
   switch (T) {
   case Type::Int:
@@ -132,8 +138,9 @@ void CodeGenerator::declareFunction(const FunctionDecl &Fn) {
 
   // Only main is visible outside the module. Internal linkage lets the
   // optimizer inline the other functions and then delete them.
-  auto Linkage = Fn.getName() == "main" ? llvm::Function::ExternalLinkage
-                                        : llvm::Function::InternalLinkage;
+  auto Linkage = Fn.getName() == "main" || Opts.ExportAllFunctions
+                     ? llvm::Function::ExternalLinkage
+                     : llvm::Function::InternalLinkage;
   llvm::Function *F =
       llvm::Function::Create(FnTy, Linkage, Fn.getName(), M.get());
   for (auto [Arg, Param] : llvm::zip(F->args(), Fn.getParams()))
@@ -483,6 +490,7 @@ llvm::BasicBlock *CodeGenerator::getTrapBlock() {
 
 std::unique_ptr<llvm::Module> minic::generateIR(const Program &Prog,
                                                 llvm::LLVMContext &Ctx,
-                                                llvm::StringRef ModuleName) {
-  return CodeGenerator(Ctx, ModuleName).run(Prog);
+                                                llvm::StringRef ModuleName,
+                                                const CodeGenOptions &Opts) {
+  return CodeGenerator(Ctx, ModuleName, Opts).run(Prog);
 }
