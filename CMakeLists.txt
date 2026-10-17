@@ -44,6 +44,7 @@ if(MINIC_SANITIZE)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+add_subdirectory(runtime)
 add_subdirectory(lib)
 add_subdirectory(tools/minic)
 add_subdirectory(test)
