@@ -10,6 +10,8 @@ const char *minic::getTypeName(Type T) {
   switch (T) {
   case Type::Unknown:
     return "<unknown>";
+  case Type::Error:
+    return "<error>";
   case Type::Void:
     return "void";
   case Type::Int:

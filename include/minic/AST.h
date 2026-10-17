@@ -18,13 +18,14 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/SMLoc.h"
 
+#include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
 
 namespace minic {
 
-enum class Type { Unknown, Void, Int, Bool };
+enum class Type { Unknown, Error, Void, Int, Bool };
 const char *getTypeName(Type T);
 
 enum class UnaryOp { Neg, Not };
@@ -65,8 +66,12 @@ public:
   IntegerLiteralExpr(llvm::StringRef Spelling, llvm::SMLoc Loc)
       : Expr(Kind::IntegerLiteral, Loc), Spelling(Spelling) {}
 
-  /// The digits as written; Sema converts and range-checks them.
+  /// The digits as written.
   llvm::StringRef getSpelling() const { return Spelling; }
+
+  /// The value, set by Sema after range checking.
+  uint64_t getValue() const { return Value; }
+  void setValue(uint64_t V) { Value = V; }
 
   static bool classof(const Expr *E) {
     return E->getKind() == Kind::IntegerLiteral;
@@ -74,6 +79,7 @@ public:
 
 private:
   llvm::StringRef Spelling;
+  uint64_t Value = 0;
 };
 
 class BoolLiteralExpr final : public Expr {
