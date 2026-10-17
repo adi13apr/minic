@@ -37,14 +37,15 @@ CMake options: `-DMINIC_WERROR=ON` treats warnings as errors, and
 `-DMINIC_SANITIZE=ON` builds with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 ## Usage
-minic --emit-ptx -O2 device.mc               # compile for NVIDIA GPUs, print PTX
-minic --emit-ptx --gpu-arch=sm_80 device.mc  # for a specific GPU architecture
+
 ```
-minic program.mc -o program        # compile and link a native executable
-minic -O2 program.mc -o program    # optimize with LLVM's -O2 pipeline
-minic --emit-llvm program.mc       # print the LLVM IR
-minic --dump-ast program.mc        # print the AST
-minic --dump-tokens program.mc     # print the tokens
+minic program.mc -o program                  # compile and link a native executable
+minic -O2 program.mc -o program              # optimize with LLVM's -O2 pipeline
+minic --emit-ptx -O2 device.mc               # compile for a GPU, print PTX assembly
+minic --emit-ptx --gpu-arch=sm_80 device.mc  # for a specific GPU architecture
+minic --emit-llvm program.mc                 # print the LLVM IR
+minic --dump-ast program.mc                  # print the AST
+minic --dump-tokens program.mc               # print the tokens
 ```
 
 ## Language Reference
@@ -105,7 +106,7 @@ print as `file:line:col: error: message` with the source line and a caret.
 - **Diagnostics use `llvm::SourceMgr`**, giving `file:line:col: error:` output with the
   source line and a caret, matching Clang.
 
-  ### Parser and AST
+### Parser and AST
 
 - **Hand-written recursive descent**, one method per rule in `docs/grammar.md`, as in
   Clang. No parser generator dependency, and full control over error messages.
@@ -126,7 +127,7 @@ print as `file:line:col: error: message` with the source line and a caret.
 - **`--dump-ast` stops after parsing**, so parser tests do not depend on Sema.
   Expressions print as S-expressions, which makes precedence tests exact.
 
-  ### Semantic analysis
+### Semantic analysis
 
 - **Two passes**: first every function signature is recorded, then bodies are
   checked, so calls may refer to functions defined later and recursion works.
@@ -172,7 +173,6 @@ print as `file:line:col: error: message` with the source line and a caret.
   compiler bug and aborts.
 - **`print` lowers to a call to `minic_print`**, provided by a small C runtime.
 
-  See [docs/grammar.md](docs/grammar.md) for the full grammar
 
 ### Driver
 
