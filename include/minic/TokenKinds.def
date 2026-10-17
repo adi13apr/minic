@@ -1,0 +1,59 @@
+//===- TokenKinds.def - minic token kinds -------------------------*- C++ -*-===//
+//
+// The single list of every token kind. Include this file after defining
+// TOK, PUNCTUATOR, and/or KEYWORD to generate code from the list.
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef TOK
+#define TOK(ID)
+#endif
+#ifndef PUNCTUATOR
+#define PUNCTUATOR(ID, SPELLING) TOK(ID)
+#endif
+#ifndef KEYWORD
+#define KEYWORD(NAME) TOK(kw_##NAME)
+#endif
+
+TOK(unknown)
+TOK(eof)
+TOK(identifier)
+TOK(integer_literal)
+
+PUNCTUATOR(l_paren, "(")
+PUNCTUATOR(r_paren, ")")
+PUNCTUATOR(l_brace, "{")
+PUNCTUATOR(r_brace, "}")
+PUNCTUATOR(semi, ";")
+PUNCTUATOR(colon, ":")
+PUNCTUATOR(comma, ",")
+PUNCTUATOR(plus, "+")
+PUNCTUATOR(minus, "-")
+PUNCTUATOR(star, "*")
+PUNCTUATOR(slash, "/")
+PUNCTUATOR(equal, "=")
+PUNCTUATOR(equalequal, "==")
+PUNCTUATOR(exclaim, "!")
+PUNCTUATOR(exclaimequal, "!=")
+PUNCTUATOR(less, "<")
+PUNCTUATOR(lessequal, "<=")
+PUNCTUATOR(greater, ">")
+PUNCTUATOR(greaterequal, ">=")
+PUNCTUATOR(arrow, "->")
+PUNCTUATOR(ampamp, "&&")
+PUNCTUATOR(pipepipe, "||")
+
+KEYWORD(fn)
+KEYWORD(let)
+KEYWORD(return)
+KEYWORD(if)
+KEYWORD(else)
+KEYWORD(while)
+KEYWORD(int)
+KEYWORD(bool)
+KEYWORD(true)
+KEYWORD(false)
+
+#undef KEYWORD
+#undef PUNCTUATOR
+#undef TOK
