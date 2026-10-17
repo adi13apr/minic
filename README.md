@@ -1,3 +1,89 @@
+# minic
+
+A compiler for minic, a small C-like language, written in C++17 on LLVM 18. It has
+a hand-written lexer and recursive-descent parser, semantic analysis with scopes and
+type checking, and LLVM IR code generation; the IR is optimized with LLVM's standard
+pass pipelines and linked into a native executable.
+
+```
+fn factorial(n: int) -> int {
+  if (n <= 1) {
+    return 1;
+  }
+  return n * factorial(n - 1);
+}
+
+fn main() -> int {
+  print(factorial(10));
+  return 0;
+}
+```
+
+## Building
+
+Requires LLVM 18.1, clang-18, CMake 3.20+, Ninja, and lit. On Ubuntu 24.04:
+
+```
+sudo apt install llvm-18-dev llvm-18-tools clang-18 ninja-build \
+  zlib1g-dev libzstd-dev libedit-dev libcurl4-openssl-dev
+pipx install lit
+
+cmake -S . -B build -G Ninja \
+  -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
+ninja -C build check
+```
+
+CMake options: `-DMINIC_WERROR=ON` treats warnings as errors, and
+`-DMINIC_SANITIZE=ON` builds with AddressSanitizer and UndefinedBehaviorSanitizer.
+
+## Usage
+
+```
+minic program.mc -o program        # compile and link a native executable
+minic -O2 program.mc -o program    # optimize with LLVM's -O2 pipeline
+minic --emit-llvm program.mc       # print the LLVM IR
+minic --dump-ast program.mc        # print the AST
+minic --dump-tokens program.mc     # print the tokens
+```
+
+## Language Reference
+
+- Types: `int` (32-bit signed, wraps on overflow) and `bool`. No implicit conversions.
+- Functions: `fn name(a: int, b: bool) -> int { ... }`; omit `-> type` for no return
+  value. A program needs `fn main() -> int`, whose result is the exit code.
+- Statements: `let x: int = expr;`, `x = expr;`, `if (...) { } else if (...) { } else { }`,
+  `while (...) { }`, `return expr;`, `{ ... }`, and function calls.
+- Operators: `* /`, `+ -`, `< <= > >=`, `== !=`, `&&`, `||` (lowest), all
+  left-associative, plus unary `-` and `!`. `&&` and `||` short-circuit. Division by
+  zero and `INT_MIN / -1` trap at run time.
+- Builtin: `print(int)` prints its argument on its own line.
+
+The full grammar is in [docs/grammar.md](docs/grammar.md); runnable programs are in
+[examples/](examples/).
+
+## Architecture
+
+```
+source ─► Lexer ─► Parser ─► AST ─► Sema ─► CodeGen ─► LLVM IR ─► optimizer ─► clang ─► executable
+                                                                  (-O1..-O3)     ▲
+                                                                runtime library ─┘
+```
+
+| Stage     | Files                                    | Responsibility                                  |
+|-----------|------------------------------------------|-------------------------------------------------|
+| Lexer     | `Token.h`, `TokenKinds.def`, `Lexer.cpp` | Source text to tokens, with locations           |
+| Parser    | `Parser.cpp`, `AST.h`                    | Tokens to AST, with error recovery              |
+| Sema      | `Sema.cpp`                               | Name resolution, type checking, return checks   |
+| CodeGen   | `CodeGen.cpp`                            | AST to verified LLVM IR                         |
+| Optimizer | `Optimizer.cpp`                          | LLVM's standard new-pass-manager pipelines      |
+| Driver    | `tools/minic/main.cpp`                   | Command line, stage order, linking with clang   |
+| Runtime   | `runtime/runtime.c`                      | `minic_print`, linked into every program        |
+
+Errors from every stage go through `DiagnosticEngine`, built on `llvm::SourceMgr`, and
+print as `file:line:col: error: message` with the source line and a caret.
+
+## Design Decisions
+
 ### Lexer
 
 - **Token kinds in one X-macro file (`TokenKinds.def`)**, as in Clang. The enum, the
@@ -86,3 +172,59 @@
 - **`print` lowers to a call to `minic_print`**, provided by a small C runtime.
 
   See [docs/grammar.md](docs/grammar.md) for the full grammar
+
+### Driver
+
+- **Links by invoking clang** on the generated IR plus the runtime library, rather than
+  embedding LLVM's backend and a linker. This keeps the compiler small and reuses
+  clang's knowledge of the platform's linker and C library.
+- **`-O1` to `-O3` use LLVM's standard pipelines** built by `PassBuilder` (the new pass
+  manager). `-O0` leaves the IR exactly as codegen produced it, so codegen tests are
+  stable.
+- **The runtime is built without sanitizers**, even in a sanitizer build, because
+  compiled programs are linked without sanitizer runtimes.
+- **`minic_print` flushes stdout** after every call, so output printed before a
+  division trap is not lost.
+
+## Testing
+
+All tests use lit and FileCheck and run with `ninja -C build check`.
+
+| Folder         | What it checks                                                          |
+|----------------|-------------------------------------------------------------------------|
+| `test/Driver`  | Command-line handling                                                   |
+| `test/Lexer`   | Every token kind, locations, and lexical errors                         |
+| `test/Parser`  | AST shape, precedence, syntax errors, and error recovery                |
+| `test/Sema`    | Every semantic error, with exact `file:line:col` locations              |
+| `test/CodeGen` | The generated IR, at `-O0` and `-O2`                                    |
+| `test/E2E`     | Compiled programs run and print the right output, at `-O0` and `-O2`    |
+
+CI runs three jobs on every push: a Release build with `-Werror`, a Debug build with
+ASan and UBSan, and a clang-format check.
+
+## Limitations
+
+- Only `int` and `bool`: no arrays, strings, global variables, or modulo operator.
+- The missing-return check is conservative: a `while (true)` loop never counts as
+  returning.
+- The runtime library's path is fixed at build time (override with `--runtime=<path>`).
+- The optimizer runs without the target's data layout; clang applies it when linking.
+- No debug information.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
